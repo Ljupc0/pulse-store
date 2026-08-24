@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin — Pulse</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="site">
+  <div class="site-row">
+    <a class="brand" href="index.html">
+      <span class="mark"><svg viewBox="0 0 24 24" fill="none"><polyline points="2,13 7,13 9,7 13,19 15,13 22,13" stroke="var(--accent)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      Pulse · Admin
+    </a>
+    <nav class="links"><a href="index.html">← Back to store</a></nav>
+    <div class="header-actions"></div>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+
+    <div id="loginView" class="card login-card">
+      <h2 class="display" style="font-size:1.2rem;">Admin sign in</h2>
+      <div class="field"><label for="userInput">Username</label><input type="text" id="userInput" autocomplete="username"></div>
+      <div class="field"><label for="passInput">Password</label><input type="password" id="passInput" autocomplete="current-password"></div>
+      <button class="btn btn-primary btn-block" id="loginBtn">Sign in</button>
+      <div class="msg" id="loginMsg"></div>
+    </div>
+
+    <div id="adminView" style="display:none;">
+      <div class="admin-tabs">
+        <button class="admin-tab active" data-tab="orders">Orders</button>
+        <button class="admin-tab" data-tab="products">Products</button>
+        <button class="admin-tab" data-tab="subscribers">Subscribers</button>
+      </div>
+
+      <div id="ordersTab">
+        <div class="card overflow">
+          <table>
+            <thead><tr><th>Order</th><th>Customer</th><th>Items</th><th>Total</th><th>Status</th><th>Placed</th></tr></thead>
+            <tbody id="ordersBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="productsTab" style="display:none;">
+        <div class="card">
+          <h2 class="display" style="font-size:1.05rem;">Add a product</h2>
+          <form id="productForm">
+            <div class="form-grid">
+              <div class="field"><label>Name</label><input type="text" id="pName" required></div>
+              <div class="field"><label>Category</label><input type="text" id="pCategory" required placeholder="Running, Training, Basketball, Recovery"></div>
+              <div class="field"><label>Price (USD)</label><input type="number" step="0.01" min="0" id="pPrice" required></div>
+              <div class="field"><label>Stock</label><input type="number" min="0" id="pStock" required></div>
+            </div>
+            <div class="field"><label>Description</label><input type="text" id="pDescription"></div>
+            <button class="btn btn-primary" type="submit">Add product</button>
+            <div class="msg" id="productMsg"></div>
+          </form>
+        </div>
+        <div class="card overflow">
+          <table>
+            <thead><tr><th>Product</th><th>Category</th><th>Price</th><th>Stock</th><th></th></tr></thead>
+            <tbody id="productsBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="subscribersTab" style="display:none;">
+        <div class="card">
+          <p style="margin:0 0 4px; color:var(--ink-dim); font-size:0.9rem;">Newsletter subscribers</p>
+          <h2 class="display" style="font-size:1.8rem; margin:0;" id="subCount">0</h2>
+        </div>
+        <div class="card overflow">
+          <table>
+            <thead><tr><th>Email</th><th>Subscribed</th></tr></thead>
+            <tbody id="subscribersBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<script src="cart.js"></script>
+<script>
+(function () {
+  var authHeader = sessionStorage.getItem('pulseAdminAuth') || '';
+  var loginView = document.getElementById('loginView');
+  var adminView = document.getElementById('adminView');
+  var loginMsg = document.getElementById('loginMsg');
+
+  function showLogin(msg) {
+    loginView.style.display = 'block'; adminView.style.display = 'none';
+    if (msg) { loginMsg.textContent = msg; loginMsg.className = 'msg show err'; }
+  }
+  function showAdmin() { loginView.style.display = 'none'; adminView.style.display = 'block'; }
+
+  function authFetch(url, opts) {
+    opts = opts || {};
+    opts.headers = Object.assign({}, opts.headers, { Authorization: authHeader });
+    return fetch(url, opts).then(function (r) {
+      if (r.status === 401) { sessionStorage.removeItem('pulseAdminAuth'); showLogin('Session expired. Please sign in again.'); throw new Error('unauth'); }
+      return r;
+    });
+  }
+
+  // ---- Orders ----
+  function loadOrders() {
+    authFetch('/api/orders').then(function (r) { return r.json(); }).then(function (orders) {
+      var body = document.getElementById('ordersBody');
+      if (!orders.length) { body.innerHTML = '<tr><td colspan="6" style="color:var(--ink-dim);">No orders yet.</td></tr>'; return; }
+      body.innerHTML = orders.map(function (o) {
+        var itemsSummary = o.items.map(function (i) { return i.qty + '× ' + i.product_name + (i.size ? ' (' + i.size + ')' : ''); }).join(', ');
+        return '<tr>' +
+          '<td class="mono">' + o.order_number + '</td>' +
+          '<td>' + o.customer_name + '<br><span style="color:var(--ink-dim);font-size:0.8rem;">' + o.customer_email + '</span></td>' +
+          '<td style="max-width:220px;">' + itemsSummary + '</td>' +
+          '<td class="mono">' + money(o.total_cents) + '</td>' +
+          '<td><select class="status-select" data-id="' + o.id + '">' +
+            ['paid', 'shipped', 'cancelled'].map(function (s) { return '<option value="' + s + '" ' + (s === o.status ? 'selected' : '') + '>' + s + '</option>'; }).join('') +
+          '</select></td>' +
+          '<td>' + o.created_at + '</td>' +
+        '</tr>';
+      }).join('');
+    }).catch(function (err) { if (err.message !== 'unauth') console.error(err); });
+  }
+  document.getElementById('ordersBody').addEventListener('change', function (e) {
+    var sel = e.target.closest('.status-select');
+    if (!sel) return;
+    authFetch('/api/orders/' + sel.dataset.id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: sel.value }) })
+      .catch(function () { alert('Could not update order status.'); });
+  });
+
+  // ---- Products ----
+  function loadProducts() {
+    fetch('/api/products').then(function (r) { return r.json(); }).then(function (products) {
+      var body = document.getElementById('productsBody');
+      body.innerHTML = products.map(function (p) {
+        return '<tr data-id="' + p.id + '">' +
+          '<td>' + p.name + '</td><td>' + p.category + '</td>' +
+          '<td class="mono">' + money(p.price_cents) + '</td>' +
+          '<td class="mono">' + p.stock + '</td>' +
+          '<td><button class="small-btn danger" type="button">Remove</button></td>' +
+        '</tr>';
+      }).join('');
+    });
+  }
+  document.getElementById('productsBody').addEventListener('click', function (e) {
+    var btn = e.target.closest('.small-btn.danger');
+    if (!btn) return;
+    var row = btn.closest('tr');
+    if (!confirm('Remove this product from the storefront?')) return;
+    authFetch('/api/admin/products/' + row.dataset.id, { method: 'DELETE' })
+      .then(function () { loadProducts(); })
+      .catch(function () { alert('Could not remove product.'); });
+  });
+
+  document.getElementById('productForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var msg = document.getElementById('productMsg');
+    var accents = ['#d7ff3f', '#ff4d2e', '#3a3f2e', '#9d9da3', '#1c1c1e'];
+    var payload = {
+      name: document.getElementById('pName').value.trim(),
+      category: document.getElementById('pCategory').value.trim(),
+      price_cents: Math.round(Number(document.getElementById('pPrice').value) * 100),
+      stock: Number(document.getElementById('pStock').value),
+      description: document.getElementById('pDescription').value.trim(),
+      accent: accents[Math.floor(Math.random() * accents.length)]
+    };
+    authFetch('/api/admin/products', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+      .then(function (r) { return r.json(); })
+      .then(function () {
+        msg.textContent = 'Product added.'; msg.className = 'msg show ok';
+        e.target.reset();
+        loadProducts();
+      })
+      .catch(function () { msg.textContent = 'Could not add product.'; msg.className = 'msg show err'; });
+  });
+
+  // ---- Subscribers ----
+  function loadSubscribers() {
+    authFetch('/api/subscribers').then(function (r) { return r.json(); }).then(function (subs) {
+      document.getElementById('subCount').textContent = subs.length;
+      var body = document.getElementById('subscribersBody');
+      if (!subs.length) { body.innerHTML = '<tr><td colspan="2" style="color:var(--ink-dim);">No subscribers yet.</td></tr>'; return; }
+      body.innerHTML = subs.map(function (s) {
+        return '<tr><td>' + s.email + '</td><td>' + s.created_at + '</td></tr>';
+      }).join('');
+    }).catch(function (err) { if (err.message !== 'unauth') console.error(err); });
+  }
+
+  // ---- Tabs ----
+  document.querySelectorAll('.admin-tab').forEach(function (tab) {
+    tab.addEventListener('click', function () {
+      document.querySelectorAll('.admin-tab').forEach(function (t) { t.classList.remove('active'); });
+      tab.classList.add('active');
+      var which = tab.dataset.tab;
+      document.getElementById('ordersTab').style.display = which === 'orders' ? 'block' : 'none';
+      document.getElementById('productsTab').style.display = which === 'products' ? 'block' : 'none';
+      document.getElementById('subscribersTab').style.display = which === 'subscribers' ? 'block' : 'none';
+      if (which === 'products') loadProducts();
+      if (which === 'subscribers') loadSubscribers();
+    });
+  });
+
+  // ---- Login ----
+  document.getElementById('loginBtn').addEventListener('click', function () {
+    var u = document.getElementById('userInput').value;
+    var p = document.getElementById('passInput').value;
+    var header = 'Basic ' + btoa(u + ':' + p);
+    fetch('/api/orders', { headers: { Authorization: header } }).then(function (r) {
+      if (!r.ok) { loginMsg.textContent = 'Invalid credentials.'; loginMsg.className = 'msg show err'; return; }
+      authHeader = header;
+      sessionStorage.setItem('pulseAdminAuth', header);
+      showAdmin();
+      loadOrders();
+    });
+  });
+
+  if (authHeader) { showAdmin(); loadOrders(); } else { showLogin(); }
+})();
+</script>
+</body>
+</html>

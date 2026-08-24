@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Your Cart — Pulse</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="site">
+  <div class="site-row">
+    <a class="brand" href="index.html">
+      <span class="mark"><svg viewBox="0 0 24 24" fill="none"><polyline points="2,13 7,13 9,7 13,19 15,13 22,13" stroke="var(--accent)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      Pulse
+    </a>
+    <nav class="links">
+      <a href="index.html">Home</a>
+      <a href="shop.html">Shop</a>
+      <a href="shop.html?category=Running">Running</a>
+      <a href="shop.html?category=Training">Training</a>
+      <a href="admin.html">Admin</a>
+    </nav>
+    <div class="header-actions">
+      <a class="cart-link" href="cart.html">Cart <span class="cart-count" data-cart-count>0</span></a>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+    <p class="eyebrow" style="margin-top:30px;">Checkout</p>
+    <h1 class="display" style="font-size:2rem;">Your cart</h1>
+    <div id="cartRoot"></div>
+  </div>
+</main>
+
+<footer class="site-footer">
+  Prices and stock are always re-checked on the server at checkout — the cart never trusts numbers from the browser.
+</footer>
+
+<script src="cart.js"></script>
+<script>
+(function () {
+  var root = document.getElementById('cartRoot');
+  var products = [];
+
+  function lineTotal(item, product) { return product.price_cents * item.qty; }
+
+  function renderEmpty() {
+    root.innerHTML = '<div class="empty-state"><div class="display">Your cart is empty</div><p>Find your next pair.</p><a class="btn btn-primary" href="shop.html">Continue shopping</a></div>';
+  }
+
+  function renderCart() {
+    var items = Cart.read();
+    if (!items.length) return renderEmpty();
+
+    var lines = items.map(function (item) {
+      var p = products.find(function (x) { return x.id === item.product_id; });
+      if (!p) return null;
+      return { item: item, product: p };
+    }).filter(Boolean);
+
+    if (!lines.length) return renderEmpty();
+
+    var subtotal = lines.reduce(function (s, l) { return s + lineTotal(l.item, l.product); }, 0);
+    var shipping = subtotal > 0 && subtotal < 7500 ? 700 : 0;
+    var total = subtotal + shipping;
+
+    root.innerHTML =
+      '<div class="cart-grid">' +
+        '<div>' + lines.map(function (l) {
+          return '<div class="cart-line" data-id="' + l.product.id + '" data-size="' + (l.item.size || '') + '">' +
+            '<div class="media" style="' + mediaBg(l.product.accent) + '">' + shoeSvg(l.product.accent) + '</div>' +
+            '<div><div class="name">' + l.product.name + '</div><div class="cat">' + l.product.category + '</div>' +
+              (l.item.size ? '<div class="size">Size ' + l.item.size + '</div>' : '') +
+              '<div class="qty-control" style="margin-top:8px;">' +
+                '<button type="button" class="qdown">−</button><span>' + l.item.qty + '</span><button type="button" class="qup">+</button>' +
+              '</div>' +
+              '<button type="button" class="remove-btn" style="margin-top:6px;">Remove</button>' +
+            '</div>' +
+            '<div class="price mono">' + money(lineTotal(l.item, l.product)) + '</div>' +
+          '</div>';
+        }).join('') + '</div>' +
+        '<div class="summary">' +
+          '<h2>Order summary</h2>' +
+          '<div class="summary-row"><span>Subtotal</span><span class="mono">' + money(subtotal) + '</span></div>' +
+          '<div class="summary-row"><span>Shipping</span><span class="mono">' + (shipping ? money(shipping) : 'Free') + '</span></div>' +
+          '<div class="summary-row total"><span>Total</span><span class="mono">' + money(total) + '</span></div>' +
+          '<form id="checkoutForm" style="margin-top:18px;">' +
+            '<div class="field"><label for="cName">Full name</label><input type="text" id="cName" required></div>' +
+            '<div class="field"><label for="cEmail">Email</label><input type="email" id="cEmail" required></div>' +
+            '<div class="field"><label for="cAddress">Shipping address</label><textarea id="cAddress" rows="2" required></textarea></div>' +
+            '<button class="btn btn-primary btn-block" type="submit" id="payBtn">Place order — ' + money(total) + '</button>' +
+            '<div class="msg" id="checkoutMsg"></div>' +
+          '</form>' +
+        '</div>' +
+      '</div>';
+
+    root.addEventListener('click', function (e) {
+      var line = e.target.closest('.cart-line');
+      if (!line) return;
+      var id = Number(line.dataset.id);
+      var size = line.dataset.size || null;
+      if (e.target.classList.contains('remove-btn')) { Cart.remove(id, size); renderCart(); }
+      if (e.target.classList.contains('qup')) { var it = Cart.read().find(function (i) { return i.product_id === id && (i.size || null) === size; }); Cart.setQty(id, size, it.qty + 1); renderCart(); }
+      if (e.target.classList.contains('qdown')) { var it2 = Cart.read().find(function (i) { return i.product_id === id && (i.size || null) === size; }); Cart.setQty(id, size, it2.qty - 1); renderCart(); }
+    }, { once: true });
+
+    document.getElementById('checkoutForm').addEventListener('submit', function (e) {
+      e.preventDefault();
+      var payBtn = document.getElementById('payBtn');
+      var msg = document.getElementById('checkoutMsg');
+      payBtn.disabled = true;
+      var payload = {
+        items: items.map(function (i) { return { product_id: i.product_id, qty: i.qty, size: i.size }; }),
+        customer: {
+          name: document.getElementById('cName').value.trim(),
+          email: document.getElementById('cEmail').value.trim(),
+          address: document.getElementById('cAddress').value.trim()
+        }
+      };
+      fetch('/api/checkout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+        .then(function (r) { return r.json().then(function (data) { return { ok: r.ok, data: data }; }); })
+        .then(function (res) {
+          if (!res.ok) throw new Error(res.data.error || 'Something went wrong.');
+          Cart.clear();
+          root.innerHTML = '<div class="empty-state"><div class="display">Order confirmed 🎉</div>' +
+            '<p>Order <strong class="mono">' + res.data.order_number + '</strong> — a confirmation would normally be emailed to you.</p>' +
+            '<a class="btn btn-primary" href="shop.html">Continue shopping</a></div>';
+        })
+        .catch(function (err) {
+          msg.textContent = err.message;
+          msg.className = 'msg show err';
+          payBtn.disabled = false;
+        });
+    });
+  }
+
+  fetch('/api/products')
+    .then(function (r) { return r.json(); })
+    .then(function (data) { products = data; renderCart(); })
+    .catch(renderEmpty);
+})();
+</script>
+</body>
+</html>

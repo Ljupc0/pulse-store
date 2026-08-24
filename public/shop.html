@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shop — Pulse</title>
+<meta name="description" content="Shop the full Pulse catalog — running, training, basketball and recovery gear.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="site">
+  <div class="site-row">
+    <a class="brand" href="index.html">
+      <span class="mark"><svg viewBox="0 0 24 24" fill="none"><polyline points="2,13 7,13 9,7 13,19 15,13 22,13" stroke="var(--accent)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      Pulse
+    </a>
+    <nav class="links">
+      <a href="index.html">Home</a>
+      <a href="shop.html" class="active">Shop</a>
+      <a href="shop.html?category=Running">Running</a>
+      <a href="shop.html?category=Training">Training</a>
+      <a href="admin.html">Admin</a>
+    </nav>
+    <div class="header-actions">
+      <a class="cart-link" href="cart.html">Cart <span class="cart-count" data-cart-count>0</span></a>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="page-hero">
+    <div class="wrap">
+      <p class="eyebrow">Full catalog</p>
+      <h1 class="display" style="font-size:clamp(2rem, 5vw, 3rem);">Shop all gear</h1>
+      <p>Running, training, basketball and recovery — everything Pulse makes, in one place.</p>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:center; padding-top:28px;">
+      <div class="filters" id="filters" style="padding-top:0; flex:1;"></div>
+      <input type="search" id="searchInput" placeholder="Search products…" style="padding:10px 16px; border-radius:999px; border:1px solid var(--line); background:var(--card); color:var(--ink); min-width:200px;">
+    </div>
+    <div class="product-grid" id="productGrid">
+      <p style="color:var(--ink-dim);">Loading products…</p>
+    </div>
+  </div>
+</main>
+
+<footer class="site-footer">
+  Prices and stock are always re-checked on the server at checkout — the cart never trusts numbers from the browser.
+</footer>
+
+<script src="cart.js"></script>
+<script>
+(function () {
+  var grid = document.getElementById('productGrid');
+  var filtersEl = document.getElementById('filters');
+  var searchInput = document.getElementById('searchInput');
+  var params = new URLSearchParams(location.search);
+  var activeCategory = params.get('category') || '';
+  var allProducts = [];
+  var searchTimer = null;
+
+  function renderFilters() {
+    var categories = Array.from(new Set(allProducts.map(function (p) { return p.category; })));
+    var chips = ['All'].concat(categories);
+    filtersEl.innerHTML = chips.map(function (c) {
+      var isActive = (c === 'All' && !activeCategory) || c === activeCategory;
+      return '<button type="button" class="filter-chip' + (isActive ? ' active' : '') + '" data-cat="' + (c === 'All' ? '' : c) + '">' + c + '</button>';
+    }).join('');
+  }
+
+  function currentList() {
+    var list = activeCategory ? allProducts.filter(function (p) { return p.category === activeCategory; }) : allProducts;
+    var q = searchInput.value.trim().toLowerCase();
+    if (q) list = list.filter(function (p) { return p.name.toLowerCase().indexOf(q) > -1 || p.description.toLowerCase().indexOf(q) > -1; });
+    return list;
+  }
+
+  function renderGrid() {
+    var list = currentList();
+    if (!list.length) { grid.innerHTML = '<p style="color:var(--ink-dim);">No products match.</p>'; return; }
+    grid.innerHTML = list.map(function (p) {
+      return '<a class="product-card" href="product.html?id=' + p.id + '">' +
+        '<div class="product-media" style="' + mediaBg(p.accent) + '">' +
+          (p.badge ? '<span class="product-tag">' + p.badge + '</span>' : '') +
+          (p.stock === 0 ? '<span class="stock-low">Sold out</span>' : (p.stock <= 5 ? '<span class="stock-low">' + p.stock + ' left</span>' : '')) +
+          shoeSvg(p.accent) +
+        '</div>' +
+        '<div class="product-body">' +
+          '<div class="cat">' + p.category + '</div>' +
+          '<div class="name">' + p.name + '</div>' +
+          '<p class="price">' + money(p.price_cents) + '</p>' +
+        '</div></a>';
+    }).join('');
+  }
+
+  filtersEl.addEventListener('click', function (e) {
+    var btn = e.target.closest('.filter-chip');
+    if (!btn) return;
+    activeCategory = btn.dataset.cat;
+    var url = new URL(location.href);
+    if (activeCategory) url.searchParams.set('category', activeCategory); else url.searchParams.delete('category');
+    history.replaceState(null, '', url);
+    renderFilters();
+    renderGrid();
+  });
+
+  searchInput.addEventListener('input', function () {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(renderGrid, 150);
+  });
+
+  fetch('/api/products')
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      allProducts = data;
+      renderFilters();
+      renderGrid();
+    })
+    .catch(function () {
+      grid.innerHTML = '<p style="color:var(--bad);">Could not load products. Is the server running?</p>';
+    });
+})();
+</script>
+</body>
+</html>
