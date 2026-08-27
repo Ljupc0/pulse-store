@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Create Account — Pulse</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="site-header"></div>
+
+<main>
+  <div class="wrap">
+    <div class="card auth-card">
+      <h1 class="display">Create account</h1>
+      <p class="sub">Track your orders and check out faster next time.</p>
+      <form id="registerForm">
+        <div class="field"><label for="name">Full name</label><input type="text" id="name" required autocomplete="name"></div>
+        <div class="field"><label for="email">Email</label><input type="email" id="email" required autocomplete="email"></div>
+        <div class="field"><label for="password">Password</label><input type="password" id="password" required minlength="6" autocomplete="new-password"></div>
+        <div class="field"><label for="confirm">Confirm password</label><input type="password" id="confirm" required minlength="6" autocomplete="new-password"></div>
+        <button class="btn btn-primary btn-block" type="submit">Create account</button>
+        <div class="msg" id="registerMsg"></div>
+      </form>
+      <p class="switch">Already have an account? <a href="login.html">Log in</a></p>
+    </div>
+  </div>
+</main>
+
+<div id="site-footer"></div>
+
+<script src="cart.js"></script>
+<script src="layout.js"></script>
+<script>
+(function () {
+  Pulse.authReady.then(function (user) {
+    if (user) window.location.href = 'account.html';
+  });
+
+  document.getElementById('registerForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var msg = document.getElementById('registerMsg');
+    var password = document.getElementById('password').value;
+    var confirm = document.getElementById('confirm').value;
+    if (password !== confirm) {
+      msg.textContent = 'Passwords do not match.';
+      msg.className = 'msg show err';
+      return;
+    }
+    var payload = {
+      name: document.getElementById('name').value.trim(),
+      email: document.getElementById('email').value.trim(),
+      password: password
+    };
+    fetch('/api/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+      .then(function (r) { return r.json().then(function (data) { return { ok: r.ok, data: data }; }); })
+      .then(function (res) {
+        if (!res.ok) throw new Error(res.data.error || 'Could not create your account.');
+        window.location.href = 'account.html';
+      })
+      .catch(function (err) {
+        msg.textContent = err.message;
+        msg.className = 'msg show err';
+      });
+  });
+})();
+</script>
+</body>
+</html>

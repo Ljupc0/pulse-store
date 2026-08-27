@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>My Account — Pulse</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="site-header"></div>
+
+<main>
+  <div class="wrap">
+    <div class="account-header">
+      <div>
+        <p class="eyebrow">My account</p>
+        <h1 id="acctName">Loading…</h1>
+      </div>
+      <button type="button" class="btn btn-outline" id="signOutBtn">Log out</button>
+    </div>
+    <p style="color:var(--ink-dim); margin:0 0 10px;" id="acctEmail"></p>
+
+    <h2 class="display" style="font-size:1.3rem; margin:44px 0 4px;">Order history</h2>
+    <div id="ordersRoot" style="margin-top:16px;">
+      <p style="color:var(--ink-dim);">Loading your orders…</p>
+    </div>
+  </div>
+</main>
+
+<div id="site-footer"></div>
+
+<script src="cart.js"></script>
+<script src="layout.js"></script>
+<script>
+(function () {
+  var ordersRoot = document.getElementById('ordersRoot');
+
+  Pulse.authReady.then(function (user) {
+    if (!user) {
+      window.location.href = 'login.html?next=account.html';
+      return;
+    }
+    document.getElementById('acctName').textContent = user.name;
+    document.getElementById('acctEmail').textContent = user.email;
+    loadOrders();
+  });
+
+  document.getElementById('signOutBtn').addEventListener('click', function () { Pulse.logout(); });
+
+  function loadOrders() {
+    fetch('/api/account/orders')
+      .then(function (r) { if (!r.ok) throw new Error(); return r.json(); })
+      .then(function (orders) {
+        if (!orders.length) {
+          ordersRoot.innerHTML = '<div class="empty-state"><div class="display">No orders yet</div><p>Once you place an order, it will show up here.</p><a class="btn btn-primary" href="shop.html">Start shopping</a></div>';
+          return;
+        }
+        ordersRoot.innerHTML = orders.map(function (o) {
+          var itemsHtml = o.items.map(function (it) {
+            return '<div class="order-items-line"><span>' + it.qty + '× ' + it.product_name + (it.size ? ' (' + it.size + ')' : '') + '</span><span class="mono">' + money(it.unit_price_cents * it.qty) + '</span></div>';
+          }).join('');
+          return '<div class="card order-card">' +
+            '<div class="order-card-head">' +
+              '<div><span class="num mono">' + o.order_number + '</span> <span class="date">· ' + o.created_at + '</span></div>' +
+              '<span class="order-status ' + o.status + '">' + o.status + '</span>' +
+            '</div>' +
+            itemsHtml +
+            '<div class="order-total-row"><span>Total</span><span class="mono">' + money(o.total_cents) + '</span></div>' +
+          '</div>';
+        }).join('');
+      })
+      .catch(function () {
+        ordersRoot.innerHTML = '<p style="color:var(--bad);">Could not load your orders. Try refreshing the page.</p>';
+      });
+  }
+})();
+</script>
+</body>
+</html>

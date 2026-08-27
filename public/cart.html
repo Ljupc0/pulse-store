@@ -8,24 +8,7 @@
 </head>
 <body>
 
-<header class="site">
-  <div class="site-row">
-    <a class="brand" href="index.html">
-      <span class="mark"><svg viewBox="0 0 24 24" fill="none"><polyline points="2,13 7,13 9,7 13,19 15,13 22,13" stroke="var(--accent)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-      Pulse
-    </a>
-    <nav class="links">
-      <a href="index.html">Home</a>
-      <a href="shop.html">Shop</a>
-      <a href="shop.html?category=Running">Running</a>
-      <a href="shop.html?category=Training">Training</a>
-      <a href="admin.html">Admin</a>
-    </nav>
-    <div class="header-actions">
-      <a class="cart-link" href="cart.html">Cart <span class="cart-count" data-cart-count>0</span></a>
-    </div>
-  </div>
-</header>
+<div id="site-header"></div>
 
 <main>
   <div class="wrap">
@@ -35,11 +18,10 @@
   </div>
 </main>
 
-<footer class="site-footer">
-  Prices and stock are always re-checked on the server at checkout — the cart never trusts numbers from the browser.
-</footer>
+<div id="site-footer"></div>
 
 <script src="cart.js"></script>
+<script src="layout.js"></script>
 <script>
 (function () {
   var root = document.getElementById('cartRoot');
@@ -66,13 +48,14 @@
     var subtotal = lines.reduce(function (s, l) { return s + lineTotal(l.item, l.product); }, 0);
     var shipping = subtotal > 0 && subtotal < 7500 ? 700 : 0;
     var total = subtotal + shipping;
+    var user = Pulse.auth;
 
     root.innerHTML =
       '<div class="cart-grid">' +
         '<div>' + lines.map(function (l) {
           return '<div class="cart-line" data-id="' + l.product.id + '" data-size="' + (l.item.size || '') + '">' +
             '<div class="media" style="' + mediaBg(l.product.accent) + '">' + shoeSvg(l.product.accent) + '</div>' +
-            '<div><div class="name">' + l.product.name + '</div><div class="cat">' + l.product.category + '</div>' +
+            '<div><div class="name">' + l.product.name + '</div><div class="cat">' + Pulse.formatCategory(l.product) + '</div>' +
               (l.item.size ? '<div class="size">Size ' + l.item.size + '</div>' : '') +
               '<div class="qty-control" style="margin-top:8px;">' +
                 '<button type="button" class="qdown">−</button><span>' + l.item.qty + '</span><button type="button" class="qup">+</button>' +
@@ -87,9 +70,10 @@
           '<div class="summary-row"><span>Subtotal</span><span class="mono">' + money(subtotal) + '</span></div>' +
           '<div class="summary-row"><span>Shipping</span><span class="mono">' + (shipping ? money(shipping) : 'Free') + '</span></div>' +
           '<div class="summary-row total"><span>Total</span><span class="mono">' + money(total) + '</span></div>' +
+          (user ? '<p style="font-size:0.84rem; color:var(--ink-dim); margin:14px 0 0;">Signed in as ' + Pulse.esc(user.email) + ' — this order will be saved to <a href="account.html" style="font-weight:700; color:var(--ink); border-bottom:2px solid var(--accent);">your account</a>.</p>' : '') +
           '<form id="checkoutForm" style="margin-top:18px;">' +
-            '<div class="field"><label for="cName">Full name</label><input type="text" id="cName" required></div>' +
-            '<div class="field"><label for="cEmail">Email</label><input type="email" id="cEmail" required></div>' +
+            '<div class="field"><label for="cName">Full name</label><input type="text" id="cName" required value="' + (user ? Pulse.esc(user.name) : '') + '"></div>' +
+            '<div class="field"><label for="cEmail">Email</label><input type="email" id="cEmail" required value="' + (user ? Pulse.esc(user.email) : '') + '"></div>' +
             '<div class="field"><label for="cAddress">Shipping address</label><textarea id="cAddress" rows="2" required></textarea></div>' +
             '<button class="btn btn-primary btn-block" type="submit" id="payBtn">Place order — ' + money(total) + '</button>' +
             '<div class="msg" id="checkoutMsg"></div>' +
@@ -125,8 +109,10 @@
         .then(function (res) {
           if (!res.ok) throw new Error(res.data.error || 'Something went wrong.');
           Cart.clear();
+          var accountNote = Pulse.auth ? '<p><a class="btn btn-outline" href="account.html">View in your account</a></p>' : '';
           root.innerHTML = '<div class="empty-state"><div class="display">Order confirmed 🎉</div>' +
             '<p>Order <strong class="mono">' + res.data.order_number + '</strong> — a confirmation would normally be emailed to you.</p>' +
+            accountNote +
             '<a class="btn btn-primary" href="shop.html">Continue shopping</a></div>';
         })
         .catch(function (err) {
@@ -137,9 +123,11 @@
     });
   }
 
-  fetch('/api/products')
-    .then(function (r) { return r.json(); })
-    .then(function (data) { products = data; renderCart(); })
+  Promise.all([
+    fetch('/api/products').then(function (r) { return r.json(); }),
+    Pulse.taxonomyReady,
+    Pulse.authReady,
+  ]).then(function (res) { products = res[0]; renderCart(); })
     .catch(renderEmpty);
 })();
 </script>

@@ -4,43 +4,28 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Shop — Pulse</title>
-<meta name="description" content="Shop the full Pulse catalog — running, training, basketball and recovery gear.">
+<meta name="description" content="Shop the full Pulse catalog — Men, Women and Kids gear across shoes, tops, outerwear, bottoms and accessories.">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-<header class="site">
-  <div class="site-row">
-    <a class="brand" href="index.html">
-      <span class="mark"><svg viewBox="0 0 24 24" fill="none"><polyline points="2,13 7,13 9,7 13,19 15,13 22,13" stroke="var(--accent)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-      Pulse
-    </a>
-    <nav class="links">
-      <a href="index.html">Home</a>
-      <a href="shop.html" class="active">Shop</a>
-      <a href="shop.html?category=Running">Running</a>
-      <a href="shop.html?category=Training">Training</a>
-      <a href="admin.html">Admin</a>
-    </nav>
-    <div class="header-actions">
-      <a class="cart-link" href="cart.html">Cart <span class="cart-count" data-cart-count>0</span></a>
-    </div>
-  </div>
-</header>
+<div id="site-header"></div>
 
 <main>
   <div class="page-hero">
     <div class="wrap">
-      <p class="eyebrow">Full catalog</p>
-      <h1 class="display" style="font-size:clamp(2rem, 5vw, 3rem);">Shop all gear</h1>
-      <p>Running, training, basketball and recovery — everything Pulse makes, in one place.</p>
+      <p class="eyebrow" id="heroEyebrow">Full catalog</p>
+      <h1 class="display" style="font-size:clamp(2rem, 5vw, 3rem);" id="heroTitle">Shop all gear</h1>
+      <p>Men, Women and Kids — shoes, tops, outerwear, bottoms and accessories, all in one place.</p>
     </div>
   </div>
 
   <div class="wrap">
-    <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:center; padding-top:28px;">
-      <div class="filters" id="filters" style="padding-top:0; flex:1;"></div>
-      <input type="search" id="searchInput" placeholder="Search products…" style="padding:10px 16px; border-radius:999px; border:1px solid var(--line); background:var(--card); color:var(--ink); min-width:200px;">
+    <div class="filters" id="genderFilters"></div>
+    <div class="filters" id="subFilters" style="padding-top:0;"></div>
+    <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:center; padding:6px 0 10px;">
+      <input type="search" id="searchInput" placeholder="Search products…" style="padding:10px 16px; border-radius:999px; border:1px solid var(--line); background:var(--card); color:var(--ink); min-width:220px; flex:1 1 220px; max-width:320px;">
+      <span id="resultCount" style="color:var(--ink-dim); font-size:0.86rem;"></span>
     </div>
     <div class="product-grid" id="productGrid">
       <p style="color:var(--ink-dim);">Loading products…</p>
@@ -48,32 +33,58 @@
   </div>
 </main>
 
-<footer class="site-footer">
-  Prices and stock are always re-checked on the server at checkout — the cart never trusts numbers from the browser.
-</footer>
+<div id="site-footer"></div>
 
 <script src="cart.js"></script>
+<script src="layout.js"></script>
 <script>
 (function () {
   var grid = document.getElementById('productGrid');
-  var filtersEl = document.getElementById('filters');
+  var genderFiltersEl = document.getElementById('genderFilters');
+  var subFiltersEl = document.getElementById('subFilters');
   var searchInput = document.getElementById('searchInput');
+  var resultCount = document.getElementById('resultCount');
   var params = new URLSearchParams(location.search);
-  var activeCategory = params.get('category') || '';
+  var activeGender = params.get('gender') || '';
+  var activeSub = params.get('subcategory') || '';
   var allProducts = [];
   var searchTimer = null;
 
+  if (params.get('search')) searchInput.value = params.get('search');
+
+  function updateHero() {
+    var eyebrow = document.getElementById('heroEyebrow');
+    var title = document.getElementById('heroTitle');
+    if (activeGender) {
+      eyebrow.textContent = Pulse.genderLabel(activeGender);
+      title.textContent = (activeSub ? Pulse.subcatLabel(activeSub) + ' — ' : '') + Pulse.genderLabel(activeGender);
+    } else {
+      eyebrow.textContent = 'Full catalog';
+      title.textContent = 'Shop all gear';
+    }
+  }
+
   function renderFilters() {
-    var categories = Array.from(new Set(allProducts.map(function (p) { return p.category; })));
-    var chips = ['All'].concat(categories);
-    filtersEl.innerHTML = chips.map(function (c) {
-      var isActive = (c === 'All' && !activeCategory) || c === activeCategory;
-      return '<button type="button" class="filter-chip' + (isActive ? ' active' : '') + '" data-cat="' + (c === 'All' ? '' : c) + '">' + c + '</button>';
+    var genders = Pulse.taxonomy.genders;
+    genderFiltersEl.innerHTML = ['All'].concat(genders).map(function (g) {
+      var val = g === 'All' ? '' : g;
+      var isActive = val === activeGender;
+      var label = g === 'All' ? 'All' : Pulse.genderLabel(g);
+      return '<button type="button" class="filter-chip' + (isActive ? ' active' : '') + '" data-gender="' + val + '">' + label + '</button>';
+    }).join('');
+
+    var subs = Pulse.taxonomy.subcategories;
+    subFiltersEl.innerHTML = ['All'].concat(subs.map(function (s) { return s.key; })).map(function (key) {
+      var isActive = key === 'All' ? !activeSub : key === activeSub;
+      var label = key === 'All' ? 'All categories' : Pulse.subcatLabel(key);
+      return '<button type="button" class="filter-chip' + (isActive ? ' active' : '') + '" data-sub="' + (key === 'All' ? '' : key) + '">' + label + '</button>';
     }).join('');
   }
 
   function currentList() {
-    var list = activeCategory ? allProducts.filter(function (p) { return p.category === activeCategory; }) : allProducts;
+    var list = allProducts;
+    if (activeGender) list = list.filter(function (p) { return p.gender === activeGender; });
+    if (activeSub) list = list.filter(function (p) { return p.subcategory === activeSub; });
     var q = searchInput.value.trim().toLowerCase();
     if (q) list = list.filter(function (p) { return p.name.toLowerCase().indexOf(q) > -1 || p.description.toLowerCase().indexOf(q) > -1; });
     return list;
@@ -81,7 +92,8 @@
 
   function renderGrid() {
     var list = currentList();
-    if (!list.length) { grid.innerHTML = '<p style="color:var(--ink-dim);">No products match.</p>'; return; }
+    resultCount.textContent = list.length + (list.length === 1 ? ' product' : ' products');
+    if (!list.length) { grid.innerHTML = '<p style="color:var(--ink-dim);">No products match. Try a different filter or search term.</p>'; return; }
     grid.innerHTML = list.map(function (p) {
       return '<a class="product-card" href="product.html?id=' + p.id + '">' +
         '<div class="product-media" style="' + mediaBg(p.accent) + '">' +
@@ -90,39 +102,51 @@
           shoeSvg(p.accent) +
         '</div>' +
         '<div class="product-body">' +
-          '<div class="cat">' + p.category + '</div>' +
+          '<div class="cat">' + Pulse.formatCategory(p) + '</div>' +
           '<div class="name">' + p.name + '</div>' +
           '<p class="price">' + money(p.price_cents) + '</p>' +
         '</div></a>';
     }).join('');
   }
 
-  filtersEl.addEventListener('click', function (e) {
+  function syncUrl() {
+    var url = new URL(location.href);
+    if (activeGender) url.searchParams.set('gender', activeGender); else url.searchParams.delete('gender');
+    if (activeSub) url.searchParams.set('subcategory', activeSub); else url.searchParams.delete('subcategory');
+    var q = searchInput.value.trim();
+    if (q) url.searchParams.set('search', q); else url.searchParams.delete('search');
+    history.replaceState(null, '', url);
+  }
+
+  genderFiltersEl.addEventListener('click', function (e) {
     var btn = e.target.closest('.filter-chip');
     if (!btn) return;
-    activeCategory = btn.dataset.cat;
-    var url = new URL(location.href);
-    if (activeCategory) url.searchParams.set('category', activeCategory); else url.searchParams.delete('category');
-    history.replaceState(null, '', url);
-    renderFilters();
-    renderGrid();
+    activeGender = btn.dataset.gender;
+    updateHero(); syncUrl(); renderFilters(); renderGrid();
+  });
+  subFiltersEl.addEventListener('click', function (e) {
+    var btn = e.target.closest('.filter-chip');
+    if (!btn) return;
+    activeSub = btn.dataset.sub;
+    updateHero(); syncUrl(); renderFilters(); renderGrid();
   });
 
   searchInput.addEventListener('input', function () {
     clearTimeout(searchTimer);
-    searchTimer = setTimeout(renderGrid, 150);
+    searchTimer = setTimeout(function () { syncUrl(); renderGrid(); }, 150);
   });
 
-  fetch('/api/products')
-    .then(function (r) { return r.json(); })
-    .then(function (data) {
-      allProducts = data;
-      renderFilters();
-      renderGrid();
-    })
-    .catch(function () {
-      grid.innerHTML = '<p style="color:var(--bad);">Could not load products. Is the server running?</p>';
-    });
+  Promise.all([
+    fetch('/api/products').then(function (r) { return r.json(); }),
+    Pulse.taxonomyReady,
+  ]).then(function (res) {
+    allProducts = res[0];
+    updateHero();
+    renderFilters();
+    renderGrid();
+  }).catch(function () {
+    grid.innerHTML = '<p style="color:var(--bad);">Could not load products. Is the server running?</p>';
+  });
 })();
 </script>
 </body>

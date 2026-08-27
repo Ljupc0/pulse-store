@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Log In — Pulse</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="site-header"></div>
+
+<main>
+  <div class="wrap">
+    <div class="card auth-card">
+      <h1 class="display">Log in</h1>
+      <p class="sub">Welcome back. Sign in to see your orders and check out faster.</p>
+      <form id="loginForm">
+        <div class="field"><label for="email">Email</label><input type="email" id="email" required autocomplete="email"></div>
+        <div class="field"><label for="password">Password</label><input type="password" id="password" required autocomplete="current-password"></div>
+        <button class="btn btn-primary btn-block" type="submit">Log in</button>
+        <div class="msg" id="loginMsg"></div>
+      </form>
+      <p class="switch">New to Pulse? <a href="register.html">Create an account</a></p>
+    </div>
+  </div>
+</main>
+
+<div id="site-footer"></div>
+
+<script src="cart.js"></script>
+<script src="layout.js"></script>
+<script>
+(function () {
+  Pulse.authReady.then(function (user) {
+    if (user) window.location.href = new URLSearchParams(location.search).get('next') || 'account.html';
+  });
+
+  document.getElementById('loginForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var msg = document.getElementById('loginMsg');
+    var payload = {
+      email: document.getElementById('email').value.trim(),
+      password: document.getElementById('password').value
+    };
+    fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+      .then(function (r) { return r.json().then(function (data) { return { ok: r.ok, data: data }; }); })
+      .then(function (res) {
+        if (!res.ok) throw new Error(res.data.error || 'Could not log in.');
+        window.location.href = new URLSearchParams(location.search).get('next') || 'account.html';
+      })
+      .catch(function (err) {
+        msg.textContent = err.message;
+        msg.className = 'msg show err';
+      });
+  });
+})();
+</script>
+</body>
+</html>
